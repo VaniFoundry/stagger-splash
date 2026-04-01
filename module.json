@@ -1,0 +1,18 @@
+{
+  "id": "stagger-splash",
+  "title": "Stagger Splash",
+  "description": "Displays a Limbus Company-style STAGGER effect directly on the token when it gains the Staggered status. Removed when the status is cleared.",
+  "version": "1.0.0",
+  "compatibility": {
+    "minimum": "11",
+    "verified": "13"
+  },
+  "authors": [{ "name": "Custom" }],
+  "esmodules": ["scripts/main.mjs"],
+  "styles": ["styles/stagger-splash.css"],
+  "languages": [{
+    "lang": "en",
+    "name": "English",
+    "path": "lang/en.json"
+  }]
+}
