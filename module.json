@@ -7,12 +7,21 @@
     "minimum": "11",
     "verified": "13"
   },
-  "authors": [{ "name": "Custom" }],
+  "authors": [
+    {
+      "name": "Vani",
+      "discord": "vani_th",
+      "flags": {}
+    }
+  ],
   "esmodules": ["scripts/main.mjs"],
   "styles": ["styles/stagger-splash.css"],
   "languages": [{
     "lang": "en",
     "name": "English",
     "path": "lang/en.json"
-  }]
+  }],
+  "manifest": "https://raw.githubusercontent.com/VaniFoundry/stagger-splash/main/module.json",
+  "download": "https://github.com/VaniFoundry/stagger-splash/releases/download/v1.1.0/stagger-splash.zip",
+  "socket": true
 }
