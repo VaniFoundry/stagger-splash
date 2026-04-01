@@ -1,4 +1,6 @@
 # Stagger Splash
+**Manifest URL:** `https://raw.githubusercontent.com/VaniFoundry/stagger-splash/main/module.json`
+
 **Designed with [Stars of the City](https://github.com/tsu-b-asa/sotc) in mind** - a Project Moon inspired TTRPG by Jakkafang & community.
 
 A Foundry VTT module that displays a Limbus Company-style **STAGGER** image directly over a token when it gains the Staggered status. The effect tracks the token as it moves and disappears when the status is cleared.
