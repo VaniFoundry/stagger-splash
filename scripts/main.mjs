@@ -182,7 +182,7 @@ function _repositionAll() {
 // STATUS DETECTION
 // ============================================================
 
-function _hasStaggered(actor) {
+function _hasStaggered(actor, tokenDoc) {
   if (!actor) return false;
 
   // Cast a wide net — check every possible place SotC could store statuses
@@ -215,10 +215,11 @@ function _hasStaggered(actor) {
     }
   }
 
-  // 4. Token-level statuses (for unlinked tokens)
-  const token = canvas.tokens?.placeables.find(t => t.actor?.id === actor.id);
-  if (token?.document?.statuses?.has(needle)) return true;
-  if (token?.document?.statuses?.has(STATUS_ID)) return true;
+  // 4. Token-level statuses — use the supplied tokenDoc directly for unlinked
+  //    tokens so each copy is checked independently rather than doing a find()
+  //    which always returns the first token sharing this actor id.
+  if (tokenDoc?.statuses?.has(needle)) return true;
+  if (tokenDoc?.statuses?.has(STATUS_ID)) return true;
 
   return false;
 }
@@ -244,36 +245,50 @@ window.staggerDebug = function() {
   console.groupEnd();
 };
 
+// tokenId → true — tracks which tokens currently have the splash shown.
+// Keyed by tokenId (not actorId) so multiple unlinked copies of the same
+// actor are each tracked independently.
+const shownTokens = new Map(); // tokenId → true
+
 /**
- * Find the first token for this actor on the current scene.
- * We need the token ID (not actor ID) to anchor the effect.
+ * Handle a status change for a specific token.
+ * Always called with the concrete token so unlinked duplicates are
+ * treated as entirely separate entities.
  */
-function _getSceneToken(actor) {
-  return canvas.tokens?.placeables.find(t => t.actor?.id === actor.id) ?? null;
-}
+function _handleTokenUpdate(tokenDoc) {
+  if (!tokenDoc) return;
 
-// actorId → tokenId mapping for shown effects
-const shownTokens = new Map(); // actorId → tokenId
+  const token = tokenDoc.object;
+  if (!token) return; // token not on this scene
 
-function _handleActorUpdate(actor) {
-  if (!actor) return;
-
-  const token      = _getSceneToken(actor);
-  if (!token) return;                      // no token on this scene — ignore
-
-  const tokenId    = token.id;
-  const wasShown   = shownTokens.has(actor.id);
-  const isStaggered = _hasStaggered(actor);
+  const tokenId     = tokenDoc.id;
+  const wasShown    = shownTokens.has(tokenId);
+  const isStaggered = _hasStaggered(tokenDoc.actor, tokenDoc);
 
   if (isStaggered && !wasShown) {
-    shownTokens.set(actor.id, tokenId);
+    shownTokens.set(tokenId, true);
     game.socket.emit(SOCKET_EVENT, { action: "show", tokenId });
     showEffect(tokenId);
   } else if (!isStaggered && wasShown) {
-    const tid = shownTokens.get(actor.id);
-    shownTokens.delete(actor.id);
-    game.socket.emit(SOCKET_EVENT, { action: "hide", tokenId: tid });
-    hideEffect(tid);
+    shownTokens.delete(tokenId);
+    game.socket.emit(SOCKET_EVENT, { action: "hide", tokenId });
+    hideEffect(tokenId);
+  }
+}
+
+/**
+ * Called from actor-level hooks (updateActor, createActiveEffect, etc.).
+ * For LINKED tokens there is exactly one token per actor so this is fine.
+ * For UNLINKED tokens the effect lives on the token document, not the actor,
+ * so actor hooks won't fire for them — updateToken handles those instead.
+ * We still walk all matching tokens as a safety net.
+ */
+function _handleActorUpdate(actor) {
+  if (!actor) return;
+  for (const token of (canvas.tokens?.placeables ?? [])) {
+    if (token.actor?.id === actor.id) {
+      _handleTokenUpdate(token.document);
+    }
   }
 }
 
@@ -314,11 +329,12 @@ Hooks.on("canvasReady", () => {
   activeEffects.clear();
   shownTokens.clear();
 
-  // Re-check all actors for existing Staggered status
+  // Re-check all tokens for existing Staggered status.
+  // Use tokenId as the key so unlinked duplicates are independent.
   requestAnimationFrame(() => requestAnimationFrame(() => {
     for (const token of (canvas.tokens?.placeables ?? [])) {
-      if (token.actor && _hasStaggered(token.actor)) {
-        shownTokens.set(token.actor.id, token.id);
+      if (_hasStaggered(token.actor, token.document)) {
+        shownTokens.set(token.id, true);
         showEffect(token.id);
       }
     }
@@ -329,7 +345,9 @@ Hooks.on("canvasReady", () => {
 Hooks.on("updateToken", (tokenDoc, changes) => {
   const isMove = "x" in changes || "y" in changes || "width" in changes || "height" in changes;
   if (!isMove) {
-    if (tokenDoc.actor) _handleActorUpdate(tokenDoc.actor);
+    // Status changes on unlinked tokens arrive here (not via actor hooks).
+    // Always use the token document directly so each copy is independent.
+    _handleTokenUpdate(tokenDoc);
     return;
   }
   // Only track if this token has an active effect
@@ -339,7 +357,7 @@ Hooks.on("updateToken", (tokenDoc, changes) => {
     movingTokens.set(tokenDoc.id, { x: destX, y: destY });
     _startAnimLoop();
   }
-  if (tokenDoc.actor) _handleActorUpdate(tokenDoc.actor);
+  _handleTokenUpdate(tokenDoc);
 });
 
 // Status added/removed via ActiveEffect
